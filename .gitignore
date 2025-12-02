@@ -1,2 +1,11 @@
 /.idea
-/target
+
+*.o
+*.so
+*.rlib
+*.dll
+*.exe
+*.bak
+
+.cargo/
+target
