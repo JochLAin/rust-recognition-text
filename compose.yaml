@@ -1,0 +1,9 @@
+services:
+  webserver:
+    build:
+      context: .
+      dockerfile: docker/webserver/Dockerfile
+    container_name: "${APP_NAME}-${APP_ENV}-webserver"
+    volumes: ["./:/home/docker"]
+    ports: ["57489:8080"]
+    command: ["cargo", "watch", "-x run --bin webserver"]

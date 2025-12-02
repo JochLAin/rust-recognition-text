@@ -1,0 +1,14 @@
+services:
+  webserver:
+    networks: [ "proxy", "default" ]
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy"
+
+      - "traefik.http.routers.${APP_NAME}-webserver.rule=Host(`${APP_DOMAIN}`)"
+      - "traefik.http.routers.${APP_NAME}-webserver.service=${APP_NAME}-webserver"
+      - "traefik.http.routers.${APP_NAME}-webserver.entrypoints=web"
+      - "traefik.http.services.${APP_NAME}-webserver.loadbalancer.server.port=8080"
+
+networks:
+  proxy: { name: "proxy", external: true }
