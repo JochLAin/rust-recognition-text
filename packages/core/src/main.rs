@@ -5,13 +5,9 @@ mod dataset;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
   let device = {
     #[cfg(feature = "cuda")]
-    {
-      Device::new_cuda(0)?
-    }
+    { Device::new_cuda(0)? }
     #[cfg(not(feature = "cuda"))]
-    {
-      Device::Cpu
-    }
+    { Device::Cpu }
   };
 
   let (train_data, train_label) = dataset::get_train(&device)?;
