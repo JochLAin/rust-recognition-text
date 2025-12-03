@@ -3,14 +3,14 @@ use csv::ReaderBuilder;
 use std::fs::File;
 use std::path::Path;
 
-fn read_csv<P: AsRef<Path>>(path: P, is_training: bool) -> Result<(usize, usize, Vec<u8>, Vec<u8>)> {
+fn read_csv<P: AsRef<Path>>(path: P, is_training: bool) -> Result<(usize, usize, Vec<f64>, Vec<f64>)> {
   let file = File::open(path)?;
   let mut reader = ReaderBuilder::new()
     .has_headers(true)
     .from_reader(file);
 
-  let mut data: Vec<u8> = Vec::new();
-  let mut labels: Vec<u8> = Vec::new();
+  let mut data: Vec<f64> = Vec::new();
+  let mut labels: Vec<f64> = Vec::new();
   let mut nb_rows = 0usize;
   let mut nb_cols = None::<usize>;
 
@@ -26,7 +26,7 @@ fn read_csv<P: AsRef<Path>>(path: P, is_training: bool) -> Result<(usize, usize,
 
     let mut is_first_line = is_training;
     for cell in record.iter() {
-      let value: u8 = cell.parse().map_err(|e| {
+      let value: f64 = cell.parse().map_err(|e| {
         Error::Msg(format!("Error parsing field {}: {}", cell, e))
       })?;
 
@@ -44,14 +44,9 @@ fn read_csv<P: AsRef<Path>>(path: P, is_training: bool) -> Result<(usize, usize,
   let nb_cols = nb_cols.unwrap_or(0);
 
   Ok((nb_rows, nb_cols, data, labels))
-
-  // let shape = (nb_rows, nb_cols);
-  //
-  // Tensor::from_vec(data, shape, device)?
-  //   .to_dtype(DType::U8)
 }
 
-fn create_tensor(nb_rows: usize, nb_cols: usize, data: Vec<u8>, device: &Device) -> Result<Tensor> {
+fn create_tensor(nb_rows: usize, nb_cols: usize, data: Vec<f64>, device: &Device) -> Result<Tensor> {
   let side =(nb_cols as f32).sqrt() as usize;
 
   if side * side != nb_cols {
@@ -62,8 +57,7 @@ fn create_tensor(nb_rows: usize, nb_cols: usize, data: Vec<u8>, device: &Device)
 
   Tensor::from_vec(data, (nb_rows, nb_cols), device)?
     .reshape((nb_rows, side, side))?
-    .unsqueeze(1)?
-    .to_dtype(DType::U8)
+    .to_dtype(DType::F64)
 }
 
 fn get_root_dir() -> &'static Path {
@@ -80,13 +74,11 @@ pub fn get_train(device: &Device) -> Result<(Tensor, Tensor)> {
   // 1258 lignes avec 1 ligne de header
   // 784 colonnes
   let path = get_root_dir().join("datasets/train.csv");
-  println!("path: {}", path.to_str().expect("Failed to read path for train data"));
-
   let (nb_rows, nb_cols, data, labels) = read_csv(path, true)?;
 
   Ok((
     create_tensor(nb_rows, nb_cols - 1, data, device)?,
-    Tensor::from_vec(labels, (nb_rows,), device)?.to_dtype(DType::U8).expect("Failed to create labels tensor")
+    Tensor::from_vec(labels, (nb_rows,), device)?.to_dtype(DType::F64).expect("Failed to create labels tensor")
   ))
 }
 

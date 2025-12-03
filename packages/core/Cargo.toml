@@ -4,10 +4,7 @@ version = "0.0.0"
 edition = "2024"
 publish = false
 
-[features]
-default = []
-cuda = ["candle-core/cuda"]
-
 [dependencies]
 candle-core = { version = "0.9.1" }
+candle-nn = { version = "0.9.1" }
 csv = "1.4.0"
