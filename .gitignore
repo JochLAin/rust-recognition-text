@@ -1,6 +1,8 @@
 /.idea
 /datasets/*.csv
 
+/assets/*.png
+
 *.o
 *.so
 *.rlib

@@ -1,3 +1,4 @@
+use crate::logger::Logger;
 use candle_core::{DType, Device, Error, Result, Tensor};
 use candle_nn::loss::cross_entropy;
 use candle_nn::ops::{sigmoid, softmax};
@@ -10,16 +11,17 @@ pub enum Activation {
     Sigmoid,
 }
 
-pub struct Layer {
+pub struct Layer<'a> {
+    logger: &'a mut Logger,
     idx: usize,
     weights: Tensor,
     biases: Tensor,
     activation: Activation,
-    debug: bool,
 }
 
-impl Layer {
+impl<'a> Layer<'a> {
     fn create(
+        logger: &'a mut Logger,
         idx: usize,
         fan_in: usize,
         fan_out: usize,
@@ -36,15 +38,19 @@ impl Layer {
         let weights = Tensor::randn(0f64, std, (fan_out, fan_in), device)?;
 
         let layer = Self {
+            logger,
             idx,
             weights,
             biases,
             activation,
-            debug: true,
         };
 
-        println!("w{}: {:?}", layer.idx, layer.weights);
-        println!("b{}: {:?}", layer.idx, layer.biases);
+        layer
+            .logger
+            .info(format!("w{}: {:?}", layer.idx, layer.weights));
+        layer
+            .logger
+            .info(format!("b{}: {:?}", layer.idx, layer.biases));
 
         Ok(layer)
     }
@@ -57,16 +63,12 @@ impl Layer {
         learning_rate: f64,
         is_last: bool,
     ) -> Result<Tensor> {
-        if self.debug {
-            println!("dz{}: {:?}", self.idx, dz);
-        }
+        self.logger.info(format!("dz{}: {:?}", self.idx, dz));
 
         let dw = self.get_weight_derivative(dz, a, m)?;
         let db = self.get_bias_derivative(dz)?;
-        if self.debug {
-            println!("dw{}: {:?}", self.idx, dw);
-            println!("db{}: {:?}", self.idx, db);
-        }
+        self.logger.info(format!("dw{}: {:?}", self.idx, dw));
+        self.logger.info(format!("db{}: {:?}", self.idx, db));
 
         let dz = if is_last {
             Tensor::zeros(dz.shape(), DType::F64, dz.device())?
@@ -84,14 +86,10 @@ impl Layer {
 
     fn forward(&self, x: &Tensor) -> Result<Tensor> {
         let z = self.calculate_result(x)?;
-        if self.debug {
-            println!("z{}: {:?}", self.idx, z);
-        }
+        self.logger.info(format!("z{}: {:?}", self.idx, z));
 
         let a = self.calculate_activation(&z)?;
-        if self.debug {
-            println!("a{}: {:?}", self.idx, a);
-        }
+        self.logger.info(format!("a{}: {:?}", self.idx, a));
 
         Ok(a)
     }
@@ -139,24 +137,30 @@ impl Layer {
     }
 }
 
-pub struct Network {
-    pub layers: Vec<Layer>,
+pub struct Network<'a> {
+    pub logger: &'a mut Logger,
+    pub layers: Vec<Layer<'a>>,
     pub dimensions: Vec<usize>,
     pub activations: Vec<Activation>,
     pub device: Device,
-    pub built: bool,
-    debug: bool,
+    built: bool,
 }
 
-impl Network {
-    pub fn new(fan_in: usize, fan_out: usize, activation: Activation, device: &Device) -> Self {
+impl<'a> Network<'a> {
+    pub fn new(
+        logger: &'a mut Logger,
+        fan_in: usize,
+        fan_out: usize,
+        activation: Activation,
+        device: &Device,
+    ) -> Self {
         Self {
             dimensions: vec![fan_in, fan_out],
             activations: vec![activation],
             device: device.clone(),
             layers: vec![],
             built: false,
-            debug: true,
+            logger,
         }
     }
 
@@ -177,6 +181,7 @@ impl Network {
             let fan_out = self.dimensions[idx];
             let activation = self.activations[idx - 1];
             self.layers.push(Layer::create(
+                self.logger,
                 idx,
                 fan_in,
                 fan_out,
@@ -191,20 +196,17 @@ impl Network {
 
     fn backward(&mut self, y: &Tensor, a: Vec<Tensor>, learning_rate: f64) -> Result<Tensor> {
         let len = self.dimensions.len() - 1;
-        if self.debug {
-            println!("⏮️ Backward network on {} layers", len);
-            println!("y: {:?}", y);
-        }
+        self.logger
+            .log(format!("⏮️ Backward network on {} layers", len));
+        self.logger.info(format!("y: {:?}", y));
 
         let m = y.dim(1)? as f64;
-        if self.debug {
-            println!("m: {:?}", m);
-        }
+        self.logger.info(format!("m: {:?}", m));
+
         let mut dz = a[a.len() - 1].sub(&y)?;
         for idx in (1..len).rev() {
-            if self.debug {
-                println!("- Backward layer {}, dz {:?}", idx - 1, dz.shape());
-            }
+            self.logger
+                .log(format!("- Backward layer {}, dz {:?}", idx - 1, dz.shape()));
             dz = self.layers[idx].backward(&dz, &a[idx - 1], m, learning_rate, idx == 1)?;
         }
 
@@ -217,20 +219,15 @@ impl Network {
         }
 
         let mut x = self.flatten(&input)?;
-        if self.debug {
-            println!("x: {:?}", x.shape());
-        }
+        self.logger.info(format!("x: {:?}", x.shape()));
 
         let len = self.dimensions.len() - 1;
-        if self.debug {
-            println!("⏩ Forward network on {} layers", len);
-        }
+        self.logger
+            .log(format!("⏩ Forward network on {} layers", len));
 
         let mut acs: Vec<Tensor> = Vec::new();
         for idx in 1..(len + 1) {
-            if self.debug {
-                println!("- Forward layer {}", idx);
-            }
+            self.logger.log(format!("- Forward layer {}", idx));
 
             x = self.layers[idx - 1].forward(&x)?;
             acs.push(x.clone());
@@ -289,42 +286,32 @@ impl Network {
         nb_iter: usize,
     ) -> Result<(Vec<f64>, Vec<f64>)> {
         let step = max(1, nb_iter / 100);
-        let quiet = !self.debug;
-        println!(
+        self.logger.log(format!(
             "Training network with {} iterations, save step each {}",
             nb_iter, step
-        );
+        ));
 
         let mut losses: Vec<f64> = Vec::new();
         let mut accuracies: Vec<f64> = Vec::new();
         for idx in 0..nb_iter {
-            println!("## Iteration {}", idx);
+            self.logger.log(format!("## Iteration {}", idx));
 
             let a = self.forward(x)?;
             self.backward(y, a.clone(), learning_rate)?;
 
             if 0 == nb_iter % step {
-                self.quiet(true);
+                self.logger.quiet(true);
                 let loss = self.get_loss(&a[a.len() - 1], y)?;
-                println!("------ loss: {}", loss);
+                self.logger.debug(format!("------ loss: {}", loss));
                 losses.push(loss);
 
                 let acc = self.get_accuracy(x, y)?;
-                println!("------ acc: {}", acc);
+                self.logger.debug(format!("------ acc: {}", acc));
                 accuracies.push(acc);
-                self.quiet(quiet);
+                self.logger.quiet(false);
             }
         }
 
         Ok((losses, accuracies))
-    }
-
-    pub fn quiet(&mut self, value: bool) -> &mut Self {
-        self.debug = !value;
-        for layer in &mut self.layers {
-            layer.debug = !value;
-        }
-
-        self
     }
 }

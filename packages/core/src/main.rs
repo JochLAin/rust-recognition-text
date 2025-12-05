@@ -3,6 +3,7 @@ use neural::{Activation, Network};
 
 mod dataset;
 mod frame;
+mod logger;
 pub mod neural;
 
 fn get_device() -> Device {
@@ -17,7 +18,7 @@ fn get_device() -> Device {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let device = get_device();
     let learning_rate = 0.1f64;
-    let nb_iter = 10000;
+    let nb_iter = 100;
 
     println!("### Retrieve train data and labels from CSV files");
     let (train_data, train_label) = dataset::get_train(&device)?;
@@ -29,15 +30,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let fan_in = train_data.dim(0)?;
     let fan_out = train_label.dim(0)?;
 
-    let (losses, accuracies) = Network::new(fan_in, fan_out, Activation::Softmax, &device)
+    let mut logger = logger::Logger::new(nb_iter, false, logger::Level::Debug)?;
+    let (losses, accuracies) = Network::new(&logger, fan_in, fan_out, Activation::Softmax, &device)
         .add_layer(32, Activation::ReLU)
         .add_layer(32, Activation::ReLU)
         .build()?
-        .quiet(true)
         .train(&train_data, &train_label, learning_rate, nb_iter)?;
 
     if !losses.is_empty() || !accuracies.is_empty() {
-        frame::show_metrics_window(losses, accuracies)?;
+        let path = frame::save_metrics_plot(&losses, &accuracies)?;
+        println!(
+            "Training metrics saved to {} (loss = red, left axis · accuracy = green, right axis 0-1). Open the file locally to inspect the curves.",
+            path.display()
+        );
     }
 
     // println!("Retrieve test data from CSV file");
