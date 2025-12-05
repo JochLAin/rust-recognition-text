@@ -24,21 +24,24 @@ fn read_csv<P: AsRef<Path>>(path: P, is_training: bool) -> Result<(usize, usize,
       ));
     }
 
-    let mut is_first_line = is_training;
+    let mut is_first_col = is_training;
     for cell in record.iter() {
       let value: f64 = cell.parse().map_err(|e| {
         Error::Msg(format!("Error parsing field {}: {}", cell, e))
       })?;
 
-      if !is_first_line {
-        is_first_line = false;
+      if is_first_col {
         labels.push(value);
+        is_first_col = false;
       } else {
-        data.push(value);
+        data.push(value / 255f64);
       }
     }
 
     nb_rows += 1;
+    if 5 <= nb_rows {
+      break;
+    }
   }
 
   let nb_cols = nb_cols.unwrap_or(0);
@@ -46,18 +49,18 @@ fn read_csv<P: AsRef<Path>>(path: P, is_training: bool) -> Result<(usize, usize,
   Ok((nb_rows, nb_cols, data, labels))
 }
 
-fn create_tensor(nb_rows: usize, nb_cols: usize, data: Vec<f64>, device: &Device) -> Result<Tensor> {
-  let side =(nb_cols as f32).sqrt() as usize;
+fn create_tensor_data(nb_rows: usize, nb_cols: usize, data: Vec<f64>, device: &Device) -> Result<Tensor> {
+  Tensor::from_vec(data, (nb_cols, nb_rows), device)?
+    .to_dtype(DType::F64)
+}
 
-  if side * side != nb_cols {
-    return Err(Error::Msg(
-      format!("Column count {nb_cols} is not a perfect square").into()
-    ));
+fn create_tensor_expected(data: Vec<f64>, device: &Device) -> Result<Tensor> {
+  let mut vec: Vec<f64> = vec![0f64; data.len() * 10];
+  for (idx, value) in data.iter().enumerate() {
+    vec[idx * 10 + (*value as usize)] = 1f64;
   }
 
-  Tensor::from_vec(data, (nb_rows, nb_cols), device)?
-    .reshape((nb_rows, side, side))?
-    .to_dtype(DType::F64)
+  Tensor::from_vec(vec, (10, data.len()), device)?.to_dtype(DType::F64)
 }
 
 fn get_root_dir() -> &'static Path {
@@ -70,23 +73,25 @@ fn get_root_dir() -> &'static Path {
   dir
 }
 
+fn normalize(data: &[f64], min: f64, max: f64) -> Vec<f64> {
+  data.iter().map(|value| (*value - min) / (max - min)).collect()
+}
+
 pub fn get_train(device: &Device) -> Result<(Tensor, Tensor)> {
-  // 1258 lignes avec 1 ligne de header
-  // 784 colonnes
   let path = get_root_dir().join("datasets/train.csv");
   let (nb_rows, nb_cols, data, labels) = read_csv(path, true)?;
+  let data = normalize(&data, 0f64, 255f64);
 
   Ok((
-    create_tensor(nb_rows, nb_cols - 1, data, device)?,
-    Tensor::from_vec(labels, (nb_rows,), device)?.to_dtype(DType::F64).expect("Failed to create labels tensor")
+    create_tensor_data(nb_rows, nb_cols - 1, data, device)?,
+    create_tensor_expected(labels, device)?
   ))
 }
 
-pub fn get_test(device: &Device) -> Result<Tensor> {
-  // 1258 lignes avec 1 ligne de header
-  // 784 colonnes
-  let path = get_root_dir().join("datasets/test.csv");
-  let (nb_rows, nb_cols, data, _) = read_csv(path, false)?;
-
-  create_tensor(nb_rows, nb_cols, data, device)
-}
+// pub fn get_test(device: &Device) -> Result<Tensor> {
+//   let path = get_root_dir().join("datasets/test.csv");
+//   let (nb_rows, nb_cols, data, _) = read_csv(path, false)?;
+//   let data = normalize(&data, 0f64, 255f64);
+//
+//   create_tensor_data(nb_rows, nb_cols, data, device)
+// }

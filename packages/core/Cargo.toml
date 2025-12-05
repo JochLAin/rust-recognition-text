@@ -5,6 +5,8 @@ edition = "2024"
 publish = false
 
 [dependencies]
-candle-core = { version = "0.9.1" }
-candle-nn = { version = "0.9.1" }
+candle-core = "0.9.1"
+candle-nn = "0.9.1"
 csv = "1.4.0"
+eframe = "0.33.2"
+egui_plot = "0.34.0"
