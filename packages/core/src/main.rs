@@ -1,4 +1,4 @@
-use candle_core::{Device};
+use candle_core::Device;
 use neural::{Activation, Network};
 
 mod dataset;
@@ -6,43 +6,43 @@ mod frame;
 pub mod neural;
 
 fn get_device() -> Device {
-  // #[cfg(feature = "cuda")]
-  // { Device::new_cuda(0).unwrap() }
-  // #[cfg(not(feature = "cuda"))]
-  // { Device::Cpu }
+    // #[cfg(feature = "cuda")]
+    // { Device::new_cuda(0).unwrap() }
+    // #[cfg(not(feature = "cuda"))]
+    // { Device::Cpu }
 
-  Device::Cpu
+    Device::Cpu
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-  let device = get_device();
-  let learning_rate = 0.1f64;
-  let nb_iter = 10000;
+    let device = get_device();
+    let learning_rate = 0.1f64;
+    let nb_iter = 10000;
 
-  println!("### Retrieve train data and labels from CSV files");
-  let (train_data, train_label) = dataset::get_train(&device)?;
+    println!("### Retrieve train data and labels from CSV files");
+    let (train_data, train_label) = dataset::get_train(&device)?;
 
-  println!("# Train csv");
-  println!("Labels: {:?}", train_label);
-  println!("Datas: {:?}", train_data);
+    println!("# Train csv");
+    println!("Labels: {:?}", train_label);
+    println!("Datas: {:?}", train_data);
 
-  let fan_in = train_data.dim(0)?;
-  let fan_out = train_label.dim(0)?;
+    let fan_in = train_data.dim(0)?;
+    let fan_out = train_label.dim(0)?;
 
-  let (losses, accuracies) = Network::new(fan_in, fan_out, Activation::Softmax, &device)
-    .add_layer(32, Activation::ReLU)
-    .add_layer(32, Activation::ReLU)
-    .build()?
-    .quiet(true)
-    .train(&train_data, &train_label, learning_rate, nb_iter)?;
+    let (losses, accuracies) = Network::new(fan_in, fan_out, Activation::Softmax, &device)
+        .add_layer(32, Activation::ReLU)
+        .add_layer(32, Activation::ReLU)
+        .build()?
+        .quiet(true)
+        .train(&train_data, &train_label, learning_rate, nb_iter)?;
 
-  if !losses.is_empty() || !accuracies.is_empty() {
-    frame::show_metrics_window(losses, accuracies)?;
-  }
+    if !losses.is_empty() || !accuracies.is_empty() {
+        frame::show_metrics_window(losses, accuracies)?;
+    }
 
-  // println!("Retrieve test data from CSV file");
-  // let test_data = dataset::get_test(&device)?;
-  // println!("test data shape: {:?}", test_data.shape());
+    // println!("Retrieve test data from CSV file");
+    // let test_data = dataset::get_test(&device)?;
+    // println!("test data shape: {:?}", test_data.shape());
 
-  Ok(())
+    Ok(())
 }
