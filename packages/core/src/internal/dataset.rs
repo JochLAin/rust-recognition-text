@@ -1,7 +1,10 @@
-use candle_core::{DType, Device, Error, Result, Tensor};
+use candle_core::{DType, Device, Tensor};
+use crate::internal::error::{Error, Result};
 use csv::ReaderBuilder;
 use std::fs::File;
 use std::path::Path;
+
+const MAX_NB_LINE: usize = 0;
 
 fn read_csv<P: AsRef<Path>>(
     path: P,
@@ -40,7 +43,7 @@ fn read_csv<P: AsRef<Path>>(
         }
 
         nb_rows += 1;
-        if 5 <= nb_rows {
+        if MAX_NB_LINE == nb_rows {
             break;
         }
     }
@@ -55,20 +58,21 @@ fn create_tensor_data(
     nb_cols: usize,
     data: Vec<f64>,
     device: &Device,
-) -> Result<Tensor> {
+) -> candle_core::Result<Tensor> {
     Tensor::from_vec(data, (nb_cols, nb_rows), device)?.to_dtype(DType::F64)
 }
 
-fn create_tensor_expected(data: Vec<f64>, device: &Device) -> Result<Tensor> {
-    let mut vec: Vec<f64> = vec![0f64; data.len() * 10];
+fn create_tensor_expected(data: Vec<f64>, device: &Device) -> candle_core::Result<Tensor> {
+    let max = 100;
+    let mut vec: Vec<f64> = vec![0f64; data.len() * max];
     for (idx, value) in data.iter().enumerate() {
-        vec[idx * 10 + (*value as usize)] = 1f64;
+        vec[idx * max + (*value as usize)] = 1f64;
     }
 
-    Tensor::from_vec(vec, (10, data.len()), device)?.to_dtype(DType::F64)
+    Tensor::from_vec(vec, (max, data.len()), device)?.to_dtype(DType::F64)
 }
 
-fn get_root_dir() -> &'static Path {
+pub fn get_root_dir() -> &'static Path {
     let root = env!("CARGO_MANIFEST_DIR");
     let mut dir = Path::new(root);
     for _ in 0..2 {

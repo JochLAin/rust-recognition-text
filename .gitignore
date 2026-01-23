@@ -1,7 +1,7 @@
 /.idea
 /datasets/*.csv
-
-/assets/*.png
+/datasets/metrics/*.png
+/datasets/models/*.json
 
 *.o
 *.so

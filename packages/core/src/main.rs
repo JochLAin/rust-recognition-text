@@ -1,10 +1,15 @@
 use candle_core::Device;
+use internal::*;
 use neural::{Activation, Network};
 
-mod dataset;
-mod frame;
-mod logger;
+mod internal;
+pub mod logger;
 pub mod neural;
+mod error;
+
+const LEARNING_RATE: f64 = 0.1;
+const LEVEL: logger::Level = logger::Level::Debug;
+const NB_ITER: usize = 10;
 
 fn get_device() -> Device {
     // #[cfg(feature = "cuda")]
@@ -15,27 +20,37 @@ fn get_device() -> Device {
     Device::Cpu
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> internal::error::Result<()> {
+    let mut logger = logger::Logger::new(NB_ITER, false, LEVEL)?;
     let device = get_device();
-    let learning_rate = 0.1f64;
-    let nb_iter = 100;
 
-    println!("### Retrieve train data and labels from CSV files");
+    logger.log("Retrieve train data and labels from CSV files");
     let (train_data, train_label) = dataset::get_train(&device)?;
 
-    println!("# Train csv");
-    println!("Labels: {:?}", train_label);
-    println!("Datas: {:?}", train_data);
+    logger.log(format!("- Train labels: {:?}", train_label));
+    logger.log(format!("- Train datas: {:?}", train_data));
 
     let fan_in = train_data.dim(0)?;
     let fan_out = train_label.dim(0)?;
 
-    let mut logger = logger::Logger::new(nb_iter, false, logger::Level::Debug)?;
-    let (losses, accuracies) = Network::new(&logger, fan_in, fan_out, Activation::Softmax, &device)
-        .add_layer(32, Activation::ReLU)
-        .add_layer(32, Activation::ReLU)
-        .build()?
-        .train(&train_data, &train_label, learning_rate, nb_iter)?;
+    let mut net = match memory::load(&logger, &device) {
+        Ok(net) => net,
+        Err(error) => {
+            logger.error(format!("{:?}", error));
+            Network::new(fan_in, fan_out, Activation::None, &device)
+                .add_layer(32, Activation::ReLU)?
+                .add_layer(32, Activation::ReLU)?
+                .build(&logger)?
+        }
+    };
+
+    let (losses, accuracies) = net.train(
+        &logger,
+        &train_data,
+        &train_label,
+        LEARNING_RATE,
+        NB_ITER,
+    )?;
 
     if !losses.is_empty() || !accuracies.is_empty() {
         let path = frame::save_metrics_plot(&losses, &accuracies)?;
@@ -44,6 +59,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             path.display()
         );
     }
+
+    memory::save(&net)?;
 
     // println!("Retrieve test data from CSV file");
     // let test_data = dataset::get_test(&device)?;

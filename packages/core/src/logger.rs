@@ -3,16 +3,17 @@ use indicatif::{ProgressBar, ProgressStyle};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Level {
-    Debug = 0,
-    Info = 1,
-    Message = 2,
-    Warning = 3,
-    Error = 4,
-    Critical = 5,
+    Dump = 0,
+    Debug = 1,
+    Info = 2,
+    Message = 3,
+    Warning = 4,
+    Error = 5,
+    Critical = 6,
 }
 
 pub struct Logger {
-    progress_bar: ProgressBar,
+    pub progress_bar: ProgressBar,
     quiet: bool,
     level: Level,
 }
@@ -34,8 +35,20 @@ impl Logger {
         })
     }
 
+    pub fn is_quiet(&self) -> bool {
+        self.quiet
+    }
+
+    pub fn iter(&self) {
+        self.progress_bar.inc(1);
+    }
+
     pub fn quiet(&mut self, quiet: bool) {
         self.quiet = quiet;
+    }
+
+    pub fn dump<I: AsRef<str>>(&self, msg: I) {
+        self.print(msg, Level::Dump);
     }
 
     pub fn debug<I: AsRef<str>>(&self, msg: I) {
