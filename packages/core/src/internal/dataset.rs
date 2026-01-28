@@ -38,7 +38,7 @@ fn read_csv<P: AsRef<Path>>(
                 labels.push(value);
                 is_first_col = false;
             } else {
-                data.push(value / 255f64);
+                data.push(value);
             }
         }
 
@@ -63,7 +63,7 @@ fn create_tensor_data(
 }
 
 fn create_tensor_expected(data: Vec<f64>, device: &Device) -> candle_core::Result<Tensor> {
-    let max = 100;
+    let max = 10;
     let mut vec: Vec<f64> = vec![0f64; data.len() * max];
     for (idx, value) in data.iter().enumerate() {
         vec[idx * max + (*value as usize)] = 1f64;

@@ -7,21 +7,23 @@ pub mod logger;
 pub mod neural;
 mod error;
 
-const LEARNING_RATE: f64 = 0.1;
-const LEVEL: logger::Level = logger::Level::Debug;
-const NB_ITER: usize = 10;
+const DECAY_RATE: f64 = 0.95;
+const DECAY_STEP: usize = 10;
+const LEARNING_RATE: f64 = 0.00001;
+const LEVEL: logger::Level = logger::Level::Message;
+const NB_ITER: usize = 1000;
 
 fn get_device() -> Device {
-    // #[cfg(feature = "cuda")]
-    // { Device::new_cuda(0).unwrap() }
-    // #[cfg(not(feature = "cuda"))]
-    // { Device::Cpu }
-
-    Device::Cpu
+    #[cfg(feature = "cuda")]
+    { Device::new_cuda(0).unwrap() }
+    // #[cfg(feature = "metal")]
+    // { Device::new_metal(0).unwrap() }
+    #[cfg(not(feature = "cuda"))]
+    { Device::Cpu }
 }
 
 fn main() -> internal::error::Result<()> {
-    let mut logger = logger::Logger::new(NB_ITER, false, LEVEL)?;
+    let logger = logger::Logger::new(NB_ITER, false, LEVEL)?;
     let device = get_device();
 
     logger.log("Retrieve train data and labels from CSV files");
@@ -48,8 +50,10 @@ fn main() -> internal::error::Result<()> {
         &logger,
         &train_data,
         &train_label,
-        LEARNING_RATE,
         NB_ITER,
+        LEARNING_RATE,
+        DECAY_RATE,
+        DECAY_STEP
     )?;
 
     if !losses.is_empty() || !accuracies.is_empty() {

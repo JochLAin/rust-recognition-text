@@ -78,7 +78,7 @@ impl Computer {
         )
     }
 
-    fn assert_derivative_result(dz: &Tensor) -> Result<()> {
+    fn assert_derivative_result(_dz: &Tensor) -> Result<()> {
 
         Ok(())
     }
@@ -398,7 +398,7 @@ impl Network {
         let mut dws: Vec<Tensor> = Vec::new();
         let mut dbs: Vec<Tensor> = Vec::new();
 
-        let mut dz = a[a.len() - 1].sub(&y)?;
+        let mut dz = softmax(&a[a.len() - 1], 1)?.sub(&y)?;
         for idx in (0..len).rev() {
             logger.info(format!("- Backward layer {} ￫ {}", idx + 1, idx));
             let (dw, db) = self.layers[idx].backward(logger, &dz, &a[idx], m)?;
@@ -454,8 +454,10 @@ impl Network {
         logger: &Logger,
         x: &Tensor,
         y: &Tensor,
-        learning_rate: f64,
         nb_iter: usize,
+        learning_rate: f64,
+        decay_rate: f64,
+        decay_step: usize,
     ) -> Result<(Vec<f64>, Vec<f64>)> {
         self.verify_network_built(true)?;
         let step = max(1, nb_iter / 100);
@@ -463,11 +465,19 @@ impl Network {
             "Training network with {} iterations, save step each {}",
             nb_iter, step
         ));
+        
+        let mut learning_rate = learning_rate;
+        let min_learning_rate = 0.00001;
 
         let mut losses: Vec<f64> = Vec::new();
         let mut accuracies: Vec<f64> = Vec::new();
         logger.progress_bar.set_position(0);
         for idx in 0..nb_iter {
+            if idx > 0 && idx % decay_step == 0 && learning_rate > min_learning_rate {
+                learning_rate = (learning_rate * decay_rate).max(min_learning_rate);
+                logger.debug(format!("📉 Learning Rate Decay: {:.6}", learning_rate));
+            }
+
             logger.debug(format!("## Iteration {}", idx));
 
             let a = self.forward(logger, x)?;
@@ -504,6 +514,7 @@ impl Network {
 
     fn calculate_accuracy(&self, a: &Tensor, y: &Tensor) -> Result<f64> {
         let y = y.argmax(0)?.to_dtype(DType::F64)?;
+        let a = a.argmax(0)?.to_dtype(DType::F64)?;
         let batch = y.dim(0)? as f64;
         let r = a.eq(&y)?
                 .to_dtype(DType::F64)?
@@ -514,7 +525,7 @@ impl Network {
     }
 
     fn calculate_loss(&self, a: &Tensor, y: &Tensor) -> candle_core::Result<f64> {
-        cross_entropy(&a, &y.t()?.argmax(0)?)?
+        cross_entropy(&a.t()?, &y.argmax(0)?)?
                 .to_dtype(DType::F64)?
                 .to_scalar()
     }
